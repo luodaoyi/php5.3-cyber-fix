@@ -23,14 +23,16 @@ fatal_error_backtraces。缺少已公开的消费者不证明不存在其他漏�
 - 即使 FPM 配置 `pm.max_requests=0`，源码也强制单请求工作进程。FPM master 负责补充 child。
   性能会下降，Redis/MySQL 持久连接不能跨请求复用。正常请求的 PHP 清理仍执行。
 - 本构建只支持 Linux x86_64、非线程 FPM、默认 Zend 分配器。CLI 仅用于检查。
-  不支持 mod_php、CGI、ZTS、APC、自定义分配器或尚未审计的第三方扩展。
+  不支持 mod_php、CGI、ZTS、自定义分配器；第三方扩展仅做下述集成检查，未进行完整安全审计。
 - 仍需请求大小限制、容器内存限制、网络隔离和现有业务安全加固。
 
 ## GitHub Actions：自动编译与隔离回归
 
 Push、PR 和手动触发运行三组：原始 baseline、patched、AddressSanitizer patched。
 baseline **故意保留原始行为**，只作为隔离对照，不可部署。
-工作流权限只读，不读取生产凭据，不访问生产系统，不自动发布或部署。
+源码回归任务权限只读，不读取生产凭据，不访问生产系统。
+全部源码回归通过后构建实际运行镜像，进行扩展和服务集成检查；仅 main 分支成功后发布到 GHCR。
+发布任务只获得当前仓库的 packages:write 权限，不自动部署服务器。
 
 检查包括：
 
@@ -51,10 +53,37 @@ bash ci/build.sh patched
 # 单独目录，也可运行 baseline / asan。重跑前使用一个干净的 checkout。
 ```
 
-产物在 `artifacts/patched/php/`。当前是验证构建，**不是现有业务镜像的直接替代品**：
-没有编译 curl、Redis 扩展，也没有验证真实数据库、登录、加解密或所有业务页面。
-二进制针对 Ubuntu 22.04，不能复制到 CentOS 7 或不同 glibc 镜像直接运行。
-流水线通过后，下一步才是在目标容器基础系统编译所需扩展和进行业务验收。
+产物在 `artifacts/patched/php/`。这组二进制针对 Ubuntu 22.04，不能复制到 CentOS 7
+或不同 glibc 镜像直接运行。完整容器使用下一节的独立构建，不复制这些二进制。
+
+## 完整运行镜像
+
+`ghcr.io/luodaoyi/php5.3-cyber-fix:5.3.29-fpm`（Linux amd64）
+
+- 沿用业务已验证的 `devilbox/php-fpm:5.3-prod`，固定摘要见 Dockerfile。
+- 用固定摘要的 GCC 6.5 / Stretch 构建器，保留原 `php-config --configure-options`，
+  重新编译本仓库的 PHP CLI/FPM；系统库、配置路径、devilbox 用户及 Supervisor 保持兼容。
+- 原镜像共享扩展保留。构建要求原来加载的扩展一个不少，并额外检查 mysql、mysqli、
+  pdo_mysql、redis、mbstring、curl、openssl、xml、json、hash、session。
+- 不为编译关闭 HTTPS 验证或 APT 签名检查。librecode 编译头文件取自 Debian 官方归档，
+  固定包 SHA256，只有构建阶段解包；原有 OpenSSL 和运行库不变。
+- 每次发布既有 `sha-<完整提交号>` 标签，也有 `5.3.29-fpm` 标签。业务应固定已验收的摘要，
+  不自动跟随浮动标签更新。
+- 镜像集成检查包括全部扩展加载、OOM fail-stop、单请求 FPM、故障后恢复、上传、
+  session、EUC-JP 编码、OpenSSL 对称加解密、XML、curl HTTP，以及临时 MySQL 5.7/Redis
+  的真实连接和读写。临时服务仅用于 CI，不随镜像部署，也不访问生产数据。
+
+手工构建：
+
+```sh
+mkdir -p build-deps
+curl --fail --location https://archive.debian.org/debian/pool/main/r/recode/librecode-dev_3.6-23_amd64.deb -o build-deps/librecode-dev.deb
+docker build --platform linux/amd64 -t php53-runtime .
+python3 ci/verify-image.py php53-runtime
+```
+
+镜像保留 Debian Stretch、旧 OpenSSL 及原有扩展，**它们自身的历史漏洞没有因此修复**。
+基础集成通过也不等于所有登录、加解密协议和业务页面完成验收。
 
 PHP 5.3 已停止维护多年。本项目只降低所述两类风险，不修复其余历史漏洞。
 最终应迁移至受支持的运行时，或完成 Go 重写。

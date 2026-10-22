@@ -120,7 +120,7 @@ echo json_encode(array('pid'=>getmypid(), 'files'=>count($_FILES),
             return docker("exec", name, "php", "-r", code).decode()
 
         php('$r=array("mysql","mysqli","pdo_mysql","redis","mbstring","curl","openssl","xml","json","hash","session");foreach($r as $e){if(!extension_loaded($e)){exit(1);}}')
-        php('$s=mb_convert_encoding("验证", "EUC-JP", "UTF-8");if(mb_convert_encoding($s,"UTF-8","EUC-JP")!=="验证"){exit(1);}')
+        php('$s=mb_convert_encoding("日本語", "EUC-JP", "UTF-8");if(mb_convert_encoding($s,"UTF-8","EUC-JP")!=="日本語"){exit(1);}')
         php('$x=openssl_encrypt("fixture","aes-128-cbc","1234567890123456",0,"1234567890123456");if(openssl_decrypt($x,"aes-128-cbc","1234567890123456",0,"1234567890123456")!=="fixture"){exit(1);}if((string)simplexml_load_string("<root>ok</root>")!=="ok"){exit(2);}')
         php('session_save_path("/tmp");if(!session_start()){exit(1);}$_SESSION["fixture"]="ok";session_write_close();')
         check("required extensions, encoding, OpenSSL, XML and session work", True)
