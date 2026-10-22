@@ -38,3 +38,40 @@ jobs:
           name: php53-${{ matrix.mode }}-${{ github.sha }}
           path: artifacts/${{ matrix.mode }}/
           retention-days: 7
+  image:
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Fetch checksum-pinned build headers
+        run: |
+          mkdir -p build-deps
+          curl --fail --location --retry 2 https://archive.debian.org/debian/pool/main/r/recode/librecode-dev_3.6-23_amd64.deb -o build-deps/librecode-dev.deb
+          echo 'b46deaf54cddb4ee6e0b2f5aad2ea12c05cff6b31a3b01a4c193e6656fef3152  build-deps/librecode-dev.deb' | sha256sum -c -
+      - name: Build PHP runtime
+        run: docker build --platform linux/amd64 --build-arg REVISION=${{ github.sha }} -t php53-runtime .
+      - name: Verify full runtime with isolated MySQL and Redis
+        run: python3 ci/verify-image.py php53-runtime
+      - name: Publish tested runtime to GHCR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+          image=ghcr.io/${{ github.repository }}
+          docker tag php53-runtime "$image:sha-${{ github.sha }}"
+          docker tag php53-runtime "$image:5.3.29-fpm"
+          docker push "$image:sha-${{ github.sha }}"
+          docker push "$image:5.3.29-fpm"
+          docker logout ghcr.io
+      - name: Upload image verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: php53-image-${{ github.sha }}
+          path: artifacts/image/
+          retention-days: 7

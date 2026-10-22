@@ -57,9 +57,9 @@ def request(address, script, mode="normal", body=b"", content_type="", extra=Non
         k, v = k.encode(), v.encode()
         encoded += length(len(k)) + length(len(v)) + k + v
     output = bytearray()
-    with socket.socket(socket.AF_UNIX) as sock:
+    with socket.socket(socket.AF_INET if isinstance(address, tuple) else socket.AF_UNIX) as sock:
         sock.settimeout(10)
-        sock.connect(str(address))
+        sock.connect(address if isinstance(address, tuple) else str(address))
         # KEEP_CONN deliberately requested: patched workers must still exit.
         sock.sendall(record(1, struct.pack("!HB5x", 1, 1)))
         sock.sendall(record(4, encoded) + record(4, b""))
@@ -184,7 +184,8 @@ php_admin_value[max_input_nesting_level] = 8
                     master.wait()
 
 
-try:
-    run()
-finally:
-    (OUT / "checks.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+if __name__ == "__main__":
+    try:
+        run()
+    finally:
+        (OUT / "checks.json").write_text(json.dumps(results, indent=2), encoding="utf-8")

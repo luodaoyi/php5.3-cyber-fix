@@ -1,0 +1,7 @@
+**
+!Dockerfile
+!UPSTREAM.md
+!php-5.3.29/
+!php-5.3.29/**
+!build-deps/
+!build-deps/librecode-dev.deb
