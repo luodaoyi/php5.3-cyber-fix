@@ -21,7 +21,7 @@ if [ "$mode" = asan ]; then
     export ASAN_OPTIONS=detect_leaks=0:abort_on_error=1
 fi
 bash configure --prefix="$root/artifacts/$mode/php" --disable-all --without-pear \
-    --disable-cgi --enable-cli --enable-fpm --enable-session --enable-filter \
+    --disable-cgi --enable-cli --enable-fpm --enable-session --enable-filter --enable-json \
     --enable-mbstring --enable-pdo --with-mysql=mysqlnd --with-mysqli=mysqlnd \
     --with-pdo-mysql=mysqlnd
 make -j2
