@@ -1841,6 +1841,8 @@ consult the installation file that came with this distribution, or visit \n\
 
 	fcgi_fd = fpm_run(&max_requests);
 	parent = 0;
+	/* CVE-2026-109619 containment: never reuse request-owned state in a worker. */
+	max_requests = 1;
 
 	/* onced forked tell zlog to also send messages through sapi_cgi_log_fastcgi() */
 	zlog_set_external_logger(sapi_cgi_log_fastcgi);
@@ -1959,7 +1961,8 @@ fastcgi_request_done:
 			requests++;
 			if (max_requests && (requests == max_requests)) {
 				fcgi_finish_request(&request, 1);
-				break;
+				/* Do not run process cleanup against the released request heap. */
+				_exit(0);
 			}
 			/* end of fastcgi loop */
 		}
